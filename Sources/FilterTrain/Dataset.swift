@@ -7,8 +7,8 @@ enum DataError: Error {
 }
 
 func hashFilename(_ name: String) -> String {
-  let sha1Hash = Insecure.SHA1.hash(data: Data(name.utf8))
-  return sha1Hash.map { String(format: "%02x", $0) }.joined()
+  let hash = Insecure.MD5.hash(data: Data(name.utf8))
+  return hash.map { String(format: "%02x", $0) }.joined()
 }
 
 class ImagePairIterator: Sequence, IteratorProtocol {
@@ -46,14 +46,16 @@ class ImagePairIterator: Sequence, IteratorProtocol {
     for fileURL in contents {
       imageNames.append(fileURL.lastPathComponent)
     }
+    let nameToHash = [String: String](
+      uniqueKeysWithValues: imageNames.map { ($0, hashFilename($0)) })
     imageNames.sort(by: { x, y in
-      hashFilename(x) < hashFilename(y)
+      nameToHash[x]! < nameToHash[y]!
     })
     switch split {
     case .train:
-      imageNames = imageNames.filter { hashFilename($0).first != "0".first }
+      imageNames = imageNames.filter { nameToHash[$0]!.first != "0".first }
     case .test:
-      imageNames = imageNames.filter { hashFilename($0).first == "0".first }
+      imageNames = imageNames.filter { nameToHash[$0]!.first == "0".first }
     }
     self.state = State(imageSize: imageSize, maxSize: maxSize, imageNames: imageNames)
   }
@@ -218,8 +220,8 @@ func loadAndMaybeCrop(
   let scale = CGFloat(sampleImageSize!) / min(size.width, size.height)
   let scaledSize = CGSize(width: scale * size.width, height: scale * size.height)
   if cropCoords == nil {
-    let x = CGFloat.random(in: CGFloat(0)...(CGFloat(imageSize) - scaledSize.width))
-    let y = CGFloat.random(in: CGFloat(0)...(CGFloat(imageSize) - scaledSize.height))
+    let x = CGFloat.random(in: CGFloat(0)...(scaledSize.width - CGFloat(imageSize)))
+    let y = CGFloat.random(in: CGFloat(0)...(scaledSize.height - CGFloat(imageSize)))
     cropCoords = (x, y)
   }
   let imageRect = CGRect(origin: CGPoint(x: -cropCoords!.0, y: -cropCoords!.1), size: scaledSize)

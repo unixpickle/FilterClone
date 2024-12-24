@@ -53,11 +53,16 @@ struct FilterTrain: AsyncParsableCommand {
   }
 
   mutating func run() async throws {
-    let model = UNet(inChannels: 3, outChannels: 3)
+    Backend.defaultBackend = try MPSBackend()
 
+    print("creating datasets...")
     let trainData = try createDataset(split: .train)
     let testData = try createDataset(split: .test)
 
+    print("creating model...")
+    let model = UNet(inChannels: 3, outChannels: 3)
+
+    print("creating optimizer...")
     let opt = Adam(model.parameters, lr: learningRate)
     var step = 0
 
@@ -82,6 +87,7 @@ struct FilterTrain: AsyncParsableCommand {
       print("no state to load from \(outputPath)")
     }
 
+    print("training...")
     for try await (
       (sourceImgs, targetImgs, trainDataState), (testSourceImgs, testTargetImgs, testDataState)
     ) in loadDataInBackground(LoaderPair(trainData, testData)) {
