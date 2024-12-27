@@ -1,9 +1,11 @@
 import Cocoa
 import CryptoKit
+import HCBacktrace
 import Honeycrisp
 
 enum DataError: Error {
   case datasetIsEmpty
+  case encodePNG
 }
 
 func hashFilename(_ name: String) -> String {
@@ -244,4 +246,35 @@ func loadAndMaybeCrop(
     }
   }
   return Tensor(data: floats, shape: [imageSize, imageSize, 3])
+}
+
+func tensorToImage(tensor: Tensor) async throws -> Data {
+  alwaysAssert(tensor.shape.count == 3)
+  alwaysAssert(tensor.shape[2] == 3, "tensor must be RGB")
+  let height = tensor.shape[0]
+  let width = tensor.shape[1]
+
+  let floats = try await tensor.floats()
+
+  let bytesPerRow = width * 4
+  var buffer = [UInt8](repeating: 0, count: height * bytesPerRow)
+  for (i, f) in floats.enumerated() {
+    buffer[(i / 3) * 4 + (i % 3)] = UInt8(floor(min(1, max(0, f)) * 255.999))
+    if i % 3 == 0 {
+      buffer[(i / 3) * 4 + 3] = 255
+    }
+  }
+
+  return try buffer.withUnsafeMutableBytes { ptr in
+    var ptr: UnsafeMutablePointer<UInt8>? = ptr.bindMemory(to: UInt8.self).baseAddress!
+    let rep = NSBitmapImageRep(
+      bitmapDataPlanes: &ptr, pixelsWide: width, pixelsHigh: height, bitsPerSample: 8,
+      samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB,
+      bytesPerRow: width * 4, bitsPerPixel: 32)!
+    if let result = rep.representation(using: .png, properties: [:]) {
+      return result
+    } else {
+      throw DataError.encodePNG
+    }
+  }
 }

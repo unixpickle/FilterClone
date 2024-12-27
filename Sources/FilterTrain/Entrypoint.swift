@@ -28,10 +28,16 @@ struct FilterTrain: AsyncParsableCommand {
   var learningRate: Float = 0.0001
 
   @Option(name: .shortAndLong, help: "The batch size for training.")
-  var batchSize: Int = 8
+  var batchSize: Int = 1
 
   @Option(name: .shortAndLong, help: "Steps between model saves.")
   var saveInterval: Int = 1000
+
+  @Option(name: .long, help: "If specified, save test set examples here")
+  var samplePath: String? = nil
+
+  @Option(name: .long, help: "How frequently to save to --sample-path")
+  var sampleInterval: Int = 10
 
   @Argument(help: "Input directory of source images.")
   var sourceDir: String
@@ -53,7 +59,7 @@ struct FilterTrain: AsyncParsableCommand {
   }
 
   mutating func run() async throws {
-    Backend.defaultBackend = try MPSBackend()
+    Backend.defaultBackend = try MPSBackend(allocator: .heap(8_000_000_000))
 
     print("creating datasets...")
     let trainData = try createDataset(split: .train)
@@ -92,7 +98,21 @@ struct FilterTrain: AsyncParsableCommand {
       (sourceImgs, targetImgs, trainDataState), (testSourceImgs, testTargetImgs, testDataState)
     ) in loadDataInBackground(LoaderPair(trainData, testData)) {
       let testLoss = try await Tensor.withGrad(enabled: false) {
-        (model(testSourceImgs) - testTargetImgs).abs().mean()
+        let out = model(testSourceImgs)
+        if let path = samplePath, (step + 1) % sampleInterval == 0 {
+          let cropSize = cropSize
+          Task {
+            do {
+              let imgArr = Tensor(
+                concat: [testSourceImgs, out.clamp(min: 0, max: 1), testTargetImgs], axis: -1)[
+                  PermuteAxes(0, 2, 3, 1)
+                ]
+                .reshape([-1, cropSize * 3, 3])
+              try await tensorToImage(tensor: imgArr).write(to: URL(filePath: path))
+            } catch {}
+          }
+        }
+        return (out - testTargetImgs).abs().mean()
       }.item()
 
       let outputs = model(sourceImgs)
