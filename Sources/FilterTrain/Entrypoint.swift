@@ -59,7 +59,9 @@ struct FilterTrain: AsyncParsableCommand {
   }
 
   mutating func run() async throws {
-    Backend.defaultBackend = try MPSBackend(allocator: .heap(8_000_000_000))
+    print("arguments: \(CommandLine.arguments)")
+    let flopCounter = BackendFLOPCounter(wrapping: try MPSBackend(allocator: .bucket))
+    Backend.defaultBackend = flopCounter
 
     print("creating datasets...")
     let trainData = try createDataset(split: .train)
@@ -94,6 +96,7 @@ struct FilterTrain: AsyncParsableCommand {
     }
 
     print("training...")
+    let startTime = DispatchTime.now()
     for try await (
       (sourceImgs, targetImgs, trainDataState), (testSourceImgs, testTargetImgs, testDataState)
     ) in loadDataInBackground(LoaderPair(trainData, testData)) {
@@ -122,7 +125,10 @@ struct FilterTrain: AsyncParsableCommand {
       opt.clearGrads()
 
       let lossValue = try await loss.item()
-      print("step \(step): loss=\(lossValue) test_loss=\(testLoss)")
+      let gflops =
+        Double(flopCounter.flopCount)
+        / Double(DispatchTime.now().uptimeNanoseconds - startTime.uptimeNanoseconds)
+      print("step \(step): loss=\(lossValue) test_loss=\(testLoss) gflops=\(gflops)")
 
       step += 1
 

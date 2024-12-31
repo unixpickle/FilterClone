@@ -222,8 +222,10 @@ func loadAndMaybeCrop(
   let scale = CGFloat(sampleImageSize!) / min(size.width, size.height)
   let scaledSize = CGSize(width: scale * size.width, height: scale * size.height)
   if cropCoords == nil {
-    let x = CGFloat.random(in: CGFloat(0)...(scaledSize.width - CGFloat(imageSize)))
-    let y = CGFloat.random(in: CGFloat(0)...(scaledSize.height - CGFloat(imageSize)))
+    let maxX = max(0, scaledSize.width - CGFloat(imageSize))
+    let maxY = max(0, scaledSize.height - CGFloat(imageSize))
+    let x = CGFloat.random(in: CGFloat(0)...maxX)
+    let y = CGFloat.random(in: CGFloat(0)...maxY)
     cropCoords = (x, y)
   }
   let imageRect = CGRect(origin: CGPoint(x: -cropCoords!.0, y: -cropCoords!.1), size: scaledSize)
