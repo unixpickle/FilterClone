@@ -3,6 +3,7 @@ import FilterModels
 import Foundation
 import HCBacktrace
 import Honeycrisp
+import ImageUtils
 
 @main
 struct FilterTrain: AsyncParsableCommand {

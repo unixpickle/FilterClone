@@ -1,0 +1,54 @@
+<!doctype html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>FilterClone</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+
+<body>
+    <input type="file" id="fileUpload" required>
+    <button id="uploadButton">Upload and Display Image</button>
+    <div id="results"></div>
+
+    <script>
+        document.getElementById('uploadButton').addEventListener('click', async () => {
+            const fileInput = document.getElementById('fileUpload');
+            const file = fileInput.files[0];
+
+            if (!file) {
+                alert('Please select a file to upload.');
+                return;
+            }
+
+            try {
+                const response = await fetch('/apply', {
+                    method: 'POST',
+                    body: file,
+                    headers: {
+                        'Content-Type': file.type
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to upload and retrieve image.');
+                }
+
+                const blob = await response.blob();
+                const imageUrl = URL.createObjectURL(blob);
+
+                const img = document.createElement('img');
+                img.src = imageUrl;
+                img.alt = 'Uploaded Image';
+                let output = document.getElementById('results');
+                output.innerHTML = '';
+                output.appendChild(img);
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        });
+    </script>
+</body>
+
+</html>

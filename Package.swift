@@ -11,15 +11,24 @@ let package = Package(
   products: [
     .library(
       name: "FilterModels",
-      targets: ["FilterModels"])
+      targets: ["FilterModels"]),
+    .library(
+      name: "ImageUtils",
+      targets: ["ImageUtils"]),
   ],
   dependencies: [
     .package(url: "https://github.com/unixpickle/honeycrisp", from: "0.0.15"),
     .package(url: "https://github.com/apple/swift-argument-parser", from: "1.3.0"),
+    .package(url: "https://github.com/vapor/vapor.git", from: "4.102.1"),
   ],
   targets: [
     .target(
       name: "FilterModels",
+      dependencies: [
+        .product(name: "Honeycrisp", package: "honeycrisp")
+      ]),
+    .target(
+      name: "ImageUtils",
       dependencies: [
         .product(name: "Honeycrisp", package: "honeycrisp")
       ]),
@@ -28,6 +37,18 @@ let package = Package(
       dependencies: [
         .product(name: "ArgumentParser", package: "swift-argument-parser"),
         "FilterModels",
+        "ImageUtils",
+      ]),
+    .executableTarget(
+      name: "FilterApply",
+      dependencies: [
+        .product(name: "ArgumentParser", package: "swift-argument-parser"),
+        .product(name: "Vapor", package: "vapor"),
+        "FilterModels",
+        "ImageUtils",
+      ],
+      resources: [
+        .process("Resources")
       ]),
   ]
 )
