@@ -16,11 +16,8 @@ enum ServerError: Error {
 struct FilterApply: AsyncParsableCommand {
 
   struct State: Codable {
+    var config: EncDec.Config
     var model: Trainable.State
-    // var opt: Adam.State?
-    // var trainData: ImageDataLoader.State?
-    // var testData: ImageDataLoader.State?
-    // var step: Int?
   }
 
   @ArgumentParser.Option(name: .shortAndLong, help: "Port to listen on.")
@@ -35,15 +32,15 @@ struct FilterApply: AsyncParsableCommand {
   mutating func run() async throws {
     Backend.defaultBackend = try MPSBackend(allocator: .bucket)
 
-    print("creating model...")
-    let model = UNet(inChannels: 3, outChannels: 3)
-
     print("loading state from \(modelPath) ...")
     guard let data = try? Data(contentsOf: URL(fileURLWithPath: modelPath)) else {
       throw ServerError.loadModel("failed to load model from \(modelPath)")
     }
     let decoder = PropertyListDecoder()
     let state = try decoder.decode(State.self, from: data)
+
+    print("creating model...")
+    let model = EncDec(config: state.config)
     try Backtrace.record { try model.loadState(state.model) }
 
     let app = try await Application.make(.detect(arguments: ["serve"]))
@@ -73,7 +70,8 @@ struct FilterApply: AsyncParsableCommand {
         return Response(status: .badRequest, body: .init(string: "Failed to decode image"))
       }
       let outTensor = Tensor.withGrad(enabled: false) {
-        return model(imgTensor[NewAxis(), PermuteAxes(2, 0, 1)])[0, PermuteAxes(1, 2, 0)]
+        let (imagePred, _) = model(inputs: imgTensor[NewAxis(), PermuteAxes(2, 0, 1)])
+        return imagePred[0, PermuteAxes(1, 2, 0)]
       }
       guard let imgData = try? await tensorToImage(tensor: outTensor) else {
         return Response(status: .badRequest, body: .init(string: "Failed to encode output image"))

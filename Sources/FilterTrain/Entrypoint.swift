@@ -9,6 +9,7 @@ import ImageUtils
 struct FilterTrain: AsyncParsableCommand {
 
   struct State: Codable {
+    var config: EncDec.Config
     var model: Trainable.State
     var opt: Adam.State?
     var trainData: ImageDataLoader.State?
@@ -33,6 +34,15 @@ struct FilterTrain: AsyncParsableCommand {
 
   @Option(name: .shortAndLong, help: "Steps between model saves.")
   var saveInterval: Int = 1000
+
+  @Option(name: .long, help: "Size of the latent codebook (if training an encoder)")
+  var vocabSize: Int? = nil
+
+  @Option(name: .long, help: "Coefficient of VQ commitment loss")
+  var vqLossCoeff: Float = 0.01
+
+  @Option(name: .long, help: "Steps per VQ codebook revival")
+  var vqReviveInterval: Int = 100
 
   @Option(name: .long, help: "If specified, save test set examples here")
   var samplePath: String? = nil
@@ -69,7 +79,13 @@ struct FilterTrain: AsyncParsableCommand {
     let testData = try createDataset(split: .test)
 
     print("creating model...")
-    let model = UNet(inChannels: 3, outChannels: 3)
+    let model = EncDec(
+      config: .init(
+        encoder: .init(),
+        vocabSize: vocabSize,
+        decoder: .init(inChannels: vocabSize == nil ? 3 : 6)
+      )
+    )
 
     print("creating optimizer...")
     let opt = Adam(model.parameters, lr: learningRate)
@@ -102,8 +118,9 @@ struct FilterTrain: AsyncParsableCommand {
       (sourceImgs, targetImgs, trainDataState), (testSourceImgs, testTargetImgs, testDataState)
     ) in loadDataInBackground(LoaderPair(trainData, testData)) {
       let testLoss = try await Tensor.withGrad(enabled: false) {
-        let out = model(testSourceImgs)
         if let path = samplePath, (step + 1) % sampleInterval == 0 {
+          // Sample the model instead of producing reconstructions with an encoder.
+          let (out, _) = model(inputs: testSourceImgs)
           let cropSize = cropSize
           Task {
             do {
@@ -116,26 +133,49 @@ struct FilterTrain: AsyncParsableCommand {
             } catch {}
           }
         }
+        let (out, _) = model(inputs: testSourceImgs, outputs: testTargetImgs)
         return (out - testTargetImgs).abs().mean()
       }.item()
 
-      let outputs = model(sourceImgs)
+      let (outputs, vqOut) = model(inputs: sourceImgs, outputs: targetImgs)
       let loss = (outputs - targetImgs).abs().mean()
-      loss.backward()
+      let optLoss =
+        if let vqOut = vqOut {
+          loss + vqLossCoeff
+            * (vqOut.output.losses.commitmentLoss + vqOut.output.losses.codebookLoss)
+        } else {
+          loss
+        }
+      optLoss.backward()
       opt.step()
       opt.clearGrads()
+      let reviveCount: Int? =
+        if let vqOut = vqOut, let bottleneck = model.bottleneck, step % vqReviveInterval == 0 {
+          try await bottleneck.revive(vqOut.embs).ints()[0]
+        } else {
+          nil
+        }
 
       let lossValue = try await loss.item()
       let gflops =
         Double(flopCounter.flopCount)
         / Double(DispatchTime.now().uptimeNanoseconds - startTime.uptimeNanoseconds)
-      print("step \(step): loss=\(lossValue) test_loss=\(testLoss) gflops=\(gflops)")
+
+      var metrics = "step \(step): loss=\(lossValue) test_loss=\(testLoss) gflops=\(gflops)"
+      if let reviveCount = reviveCount {
+        metrics += " revive=\(reviveCount)"
+      }
+      if let vqOut = vqOut {
+        metrics += " commitment=\(try await vqOut.output.losses.commitmentLoss.item())"
+      }
+      print(metrics)
 
       step += 1
 
       if step % saveInterval == 0 {
         print("saving to \(outputPath) ...")
         let state = State(
+          config: model.config,
           model: try await model.state(),
           opt: try await opt.state(),
           trainData: trainDataState,
