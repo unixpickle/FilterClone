@@ -8,7 +8,7 @@ public class EncDec: Trainable {
     public let embs: Tensor
   }
 
-  public struct Config: Codable {
+  public struct Config: Codable, Equatable {
     public let encoder: Encoder.Config?
     public let vocabSize: Int?
     public let decoder: UNet.Config
@@ -20,13 +20,15 @@ public class EncDec: Trainable {
     }
   }
 
-  public let config: Config
+  public var config: Config {
+    Config(encoder: encoder?.config, vocabSize: bottleneck?.vocab, decoder: decoder.config)
+  }
+
   @Child public var encoder: Encoder?
   @Child public var bottleneck: VQBottleneck?
   @Child public var decoder: UNet
 
   public init(config: Config) {
-    self.config = config
     super.init()
 
     if let encoder = config.encoder, let vocabSize = config.vocabSize {
@@ -38,6 +40,13 @@ public class EncDec: Trainable {
     }
 
     self.decoder = UNet(config: config.decoder)
+  }
+
+  public func addResolution(_ outerChannels: Int) {
+    if let encoder = encoder {
+      encoder.addResolution(outerChannels)
+    }
+    decoder.addResolution(outerChannels)
   }
 
   @recordCaller

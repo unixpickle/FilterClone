@@ -3,7 +3,7 @@ import Honeycrisp
 
 public class Encoder: Trainable {
 
-  public struct Config: Codable {
+  public struct Config: Codable, Equatable {
     public var inChannels: Int = 6
     public var outChannels: Int = 3
     public var resBlockCount: Int = 2
@@ -22,6 +22,8 @@ public class Encoder: Trainable {
     }
   }
 
+  var config: Config
+
   @Child var inputConv: Conv2D
   @Child var inputBlocks: TrainableArray<ResBlock>
   @Child var middleBlocks: TrainableArray<ResBlock>
@@ -29,13 +31,14 @@ public class Encoder: Trainable {
   @Child var outputLinear: Linear
 
   public init(config: Config) {
+    self.config = config
+
     super.init()
 
     inputConv = Conv2D(
       inChannels: config.inChannels, outChannels: config.innerChannels[0], kernelSize: .square(3),
       padding: .same)
 
-    var skipChannels: [Int] = [config.innerChannels[0]]
     var ch = config.innerChannels[0]
 
     var inputs = [ResBlock]()
@@ -44,12 +47,10 @@ public class Encoder: Trainable {
       for _ in 0..<config.resBlockCount {
         inputs.append(ResBlock(inChannels: ch, outChannels: newCh))
         ch = newCh
-        skipChannels.append(ch)
       }
       if i + 1 < config.innerChannels.count {
         inputs.append(
           ResBlock(inChannels: ch, outChannels: config.innerChannels[i], resample: .downsample))
-        skipChannels.append(ch)
       }
     }
 
@@ -62,6 +63,32 @@ public class Encoder: Trainable {
 
     inputBlocks = TrainableArray(inputs)
     middleBlocks = TrainableArray(middle)
+  }
+
+  public func addResolution(_ outerChannels: Int) {
+    var config = config
+    config.innerChannels.insert(outerChannels, at: 0)
+    self.config = config
+
+    inputConv = Conv2D(
+      inChannels: config.inChannels, outChannels: config.innerChannels[0], kernelSize: .square(3),
+      padding: .same)
+
+    var skipChannels: [Int] = [config.innerChannels[0]]
+    var ch = config.innerChannels[0]
+
+    var inputs = [ResBlock]()
+    let newCh = config.innerChannels[1]
+    for _ in 0..<config.resBlockCount {
+      inputs.append(ResBlock(inChannels: ch, outChannels: newCh))
+      ch = newCh
+      skipChannels.append(ch)
+    }
+    inputs.append(
+      ResBlock(inChannels: ch, outChannels: config.innerChannels[1], resample: .downsample))
+    inputs.append(contentsOf: inputBlocks.children)
+
+    inputBlocks = TrainableArray(inputs)
   }
 
   @recordCaller

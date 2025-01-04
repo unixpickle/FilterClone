@@ -79,9 +79,9 @@ struct FilterTrain: AsyncParsableCommand {
     let testData = try createDataset(split: .test)
 
     print("creating model...")
-    let model = EncDec(
+    var model = EncDec(
       config: .init(
-        encoder: .init(),
+        encoder: vocabSize == nil ? Encoder.Config.init() : nil,
         vocabSize: vocabSize,
         decoder: .init(inChannels: vocabSize == nil ? 3 : 6)
       )
@@ -95,6 +95,10 @@ struct FilterTrain: AsyncParsableCommand {
       print("loading state from \(outputPath) ...")
       let decoder = PropertyListDecoder()
       let state = try decoder.decode(State.self, from: data)
+      if state.config != model.config {
+        print("re-creating model with new configuration ...")
+        model = EncDec(config: state.config)
+      }
       try Backtrace.record { try model.loadState(state.model) }
       if let optState = state.opt {
         try Backtrace.record { try opt.loadState(optState) }

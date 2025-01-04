@@ -3,7 +3,7 @@ import Honeycrisp
 
 public class UNet: Trainable {
 
-  public struct Config: Codable {
+  public struct Config: Codable, Equatable {
     public var inChannels: Int = 3
     public var outChannels: Int = 3
     public var resBlockCount: Int = 2
@@ -42,6 +42,7 @@ public class UNet: Trainable {
     }
   }
 
+  var config: Config
   @Child var inputConv: Conv2D
   @Child var inputBlocks: TrainableArray<ResBlock>
   @Child var middleBlocks: TrainableArray<ResBlock>
@@ -50,6 +51,8 @@ public class UNet: Trainable {
   @Child var outputConv: Conv2D
 
   public init(config: Config) {
+    self.config = config
+
     super.init()
 
     inputConv = Conv2D(
@@ -103,6 +106,52 @@ public class UNet: Trainable {
 
     inputBlocks = TrainableArray(inputs)
     middleBlocks = TrainableArray(middle)
+    outputBlocks = TrainableArray(outputs)
+  }
+
+  public func addResolution(_ outerChannels: Int) {
+    var config = config
+    config.innerChannels.insert(outerChannels, at: 0)
+    self.config = config
+
+    inputConv = Conv2D(
+      inChannels: config.inChannels, outChannels: config.innerChannels[0], kernelSize: .square(3),
+      padding: .same)
+
+    var skipChannels: [Int] = [config.innerChannels[0]]
+    var ch = config.innerChannels[0]
+
+    var inputs = [ResBlock]()
+    let newCh = config.innerChannels[1]
+    for _ in 0..<config.resBlockCount {
+      inputs.append(ResBlock(inChannels: ch, outChannels: newCh))
+      ch = newCh
+      skipChannels.append(ch)
+    }
+    inputs.append(
+      ResBlock(inChannels: ch, outChannels: config.innerChannels[1], resample: .downsample))
+    inputs.append(contentsOf: inputBlocks.children)
+    inputBlocks = TrainableArray(inputs)
+
+    var outputs = outputBlocks.children
+    outputs.last!.upsample = ResBlock(inChannels: config.innerChannels[1], resample: .upsample)
+
+    let outChannels = config.innerChannels[0]
+    for _ in 0..<(config.resBlockCount + 1) {
+      let skip = skipChannels.popLast()!
+      let inputBlock = ResBlock(inChannels: ch + skip, outChannels: outChannels)
+      ch = outChannels
+      outputs.append(OutputBlock(inputBlock, upsample: nil))
+    }
+    outputBlocks = TrainableArray(outputs)
+
+    outputNorm = GroupNorm(groupCount: 32, channelCount: config.innerChannels[0])
+    outputConv = Conv2D(
+      inChannels: config.innerChannels[0], outChannels: config.outChannels, kernelSize: .square(3),
+      padding: .same
+    )
+
+    inputBlocks = TrainableArray(inputs)
     outputBlocks = TrainableArray(outputs)
   }
 

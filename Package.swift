@@ -40,6 +40,12 @@ let package = Package(
         "ImageUtils",
       ]),
     .executableTarget(
+      name: "FilterIncreaseRes",
+      dependencies: [
+        .product(name: "ArgumentParser", package: "swift-argument-parser"),
+        "FilterModels",
+      ]),
+    .executableTarget(
       name: "FilterApply",
       dependencies: [
         .product(name: "ArgumentParser", package: "swift-argument-parser"),
