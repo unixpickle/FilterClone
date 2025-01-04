@@ -50,7 +50,7 @@ public class EncDec: Trainable {
   }
 
   @recordCaller
-  private func _callAsFunction(inputs: Tensor, outputs: Tensor? = nil) -> (
+  private func _callAsFunction(inputs: Tensor, outputs: Tensor? = nil, latentIdx: [Int]? = nil) -> (
     Tensor, VQInfo?
   ) {
     var h = inputs
@@ -62,6 +62,8 @@ public class EncDec: Trainable {
         let v = bottleneck(encOut)
         latents = v.straightThrough
         vqOut = VQInfo(output: v, embs: encOut.noGrad())
+      } else if let latentIdx = latentIdx {
+        latents = bottleneck.dictionary.gather(axis: 0, indices: Tensor(data: latentIdx))
       } else {
         latents = bottleneck.dictionary.gather(
           axis: 0, indices: Tensor(randInt: [h.shape[0]], in: 0..<Int64(bottleneck.vocab)))

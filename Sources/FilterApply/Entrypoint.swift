@@ -50,18 +50,35 @@ struct FilterApply: AsyncParsableCommand {
     guard let url = Bundle.module.url(forResource: "index", withExtension: "html") else {
       throw ServerError.missingResource("index.html")
     }
-    guard let contents = try? Data(contentsOf: url) else {
+    guard var contents = try? Data(contentsOf: url) else {
       throw ServerError.loadResource("index.html")
     }
+    if let vocab = state.config.vocabSize {
+      let options = (0..<vocab).map { i in "<option value=\"\(i)\">\(i)</option>" }.joined()
+      contents.replace(
+        Data("<!-- latent here -->".utf8),
+        with: Data(
+          "Latent code: <select id=\"latent\"><option value=\"all\">all</option>\(options)</select>"
+            .utf8)
+      )
+    }
+
+    let indexPage = contents
     app.on(.GET, "") { request -> Response in
       Response(
         status: .ok,
         headers: ["content-type": "text/html"],
-        body: .init(data: contents))
+        body: .init(data: indexPage))
     }
 
     let imageSize = imageSize
     app.on(.POST, "apply", body: .collect(maxSize: "100mb")) { request -> Response in
+      let latentIdx: [Int]? =
+        if let latent = try? request.query.get(Int.self, at: "latent") {
+          [latent]
+        } else {
+          nil
+        }
       guard let body = request.body.data else {
         return Response(status: .badRequest, body: .init(string: "Invalid upload"))
       }
@@ -70,7 +87,10 @@ struct FilterApply: AsyncParsableCommand {
         return Response(status: .badRequest, body: .init(string: "Failed to decode image"))
       }
       let outTensor = Tensor.withGrad(enabled: false) {
-        let (imagePred, _) = model(inputs: imgTensor[NewAxis(), PermuteAxes(2, 0, 1)])
+        let (imagePred, _) = model(
+          inputs: imgTensor[NewAxis(), PermuteAxes(2, 0, 1)],
+          latentIdx: latentIdx
+        )
         return imagePred[0, PermuteAxes(1, 2, 0)]
       }
       guard let imgData = try? await tensorToImage(tensor: outTensor) else {

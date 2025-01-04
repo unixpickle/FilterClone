@@ -8,22 +8,26 @@
 </head>
 
 <body>
-    <input type="file" id="fileUpload" required>
+    Upload an image: <input type="file" id="fileUpload" required>
+    <br>
     <button id="uploadButton">Upload and Display Image</button>
+    <br>
+    
+    <!-- latent here -->
+
     <div id="results"></div>
 
     <script>
-        document.getElementById('uploadButton').addEventListener('click', async () => {
-            const fileInput = document.getElementById('fileUpload');
-            const file = fileInput.files[0];
+        let output = document.getElementById('results');
 
-            if (!file) {
-                alert('Please select a file to upload.');
-                return;
+        async function processImage(file, latent) {
+            let url = '/apply';
+            if (latent !== null) {
+                url += '?latent=' + latent;
             }
 
             try {
-                const response = await fetch('/apply', {
+                const response = await fetch(url, {
                     method: 'POST',
                     body: file,
                     headers: {
@@ -41,11 +45,33 @@
                 const img = document.createElement('img');
                 img.src = imageUrl;
                 img.alt = 'Uploaded Image';
-                let output = document.getElementById('results');
-                output.innerHTML = '';
                 output.appendChild(img);
             } catch (error) {
                 console.error('Error:', error);
+            }
+        }
+
+        document.getElementById('uploadButton').addEventListener('click', async () => {
+            const fileInput = document.getElementById('fileUpload');
+            const file = fileInput.files[0];
+
+            if (!file) {
+                alert('Please select a file to upload.');
+                return;
+            }
+
+            output.innerHTML = '';
+
+            const latent = document.getElementById('latent');
+            if (latent && latent.value == 'all') {
+                let items = latent.getElementsByTagName('option');
+                for (let i = 1; i < items.length; i++) {
+                    await processImage(file, items[i].value);
+                }
+            } else if (latent) {
+                await processImage(file, latent.value);
+            } else {
+                await processImage(file, null);
             }
         });
     </script>

@@ -81,7 +81,7 @@ struct FilterTrain: AsyncParsableCommand {
     print("creating model...")
     var model = EncDec(
       config: .init(
-        encoder: vocabSize == nil ? Encoder.Config.init() : nil,
+        encoder: vocabSize != nil ? Encoder.Config.init() : nil,
         vocabSize: vocabSize,
         decoder: .init(inChannels: vocabSize == nil ? 3 : 6)
       )
@@ -122,6 +122,8 @@ struct FilterTrain: AsyncParsableCommand {
       (sourceImgs, targetImgs, trainDataState), (testSourceImgs, testTargetImgs, testDataState)
     ) in loadDataInBackground(LoaderPair(trainData, testData)) {
       let testLoss = try await Tensor.withGrad(enabled: false) {
+        model.mode = .inference
+        defer { model.mode = .training }
         if let path = samplePath, (step + 1) % sampleInterval == 0 {
           // Sample the model instead of producing reconstructions with an encoder.
           let (out, _) = model(inputs: testSourceImgs)
@@ -154,7 +156,8 @@ struct FilterTrain: AsyncParsableCommand {
       opt.step()
       opt.clearGrads()
       let reviveCount: Int? =
-        if let vqOut = vqOut, let bottleneck = model.bottleneck, step % vqReviveInterval == 0 {
+        if let vqOut = vqOut, let bottleneck = model.bottleneck, (step + 1) % vqReviveInterval == 0
+        {
           try await bottleneck.revive(vqOut.embs).ints()[0]
         } else {
           nil
