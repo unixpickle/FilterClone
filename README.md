@@ -4,10 +4,10 @@ I trained neural networks to apply intelligent "filters" to images. These neural
 
 | Input        | Aged Filter   | Cartoon Filter   |
 |--------------|---------------|------------------|
-| ![Input](1_in.jpg) | ![Aged](1_old.jpg) | ![Cartoon](1_cartoon.jpg) |
-| ![Input](2_in.jpg) | ![Aged](2_old.jpg) | ![Cartoon](2_cartoon.jpg) |
-| ![Input](3_in.jpg) | ![Aged](3_old.jpg) | ![Cartoon](3_cartoon.jpg) |
-| ![Input](4_in.jpg) | ![Aged](4_old.jpg) | ![Cartoon](4_cartoon.jpg) |
+| ![Input](examples/1_in.jpg) | ![Aged](examples/1_old.jpg) | ![Cartoon](examples/1_cartoon.jpg) |
+| ![Input](examples/2_in.jpg) | ![Aged](examples/2_old.jpg) | ![Cartoon](examples/2_cartoon.jpg) |
+| ![Input](examples/3_in.jpg) | ![Aged](examples/3_old.jpg) | ![Cartoon](examples/3_cartoon.jpg) |
+| ![Input](examples/4_in.jpg) | ![Aged](examples/4_old.jpg) | ![Cartoon](examples/4_cartoon.jpg) |
 
 # How it works
 
