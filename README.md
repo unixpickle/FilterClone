@@ -15,6 +15,10 @@ I trained neural networks to apply intelligent "filters" to images. These neural
 
 I created a dataset of around 100K input-output pairs, where the input is an image and the output is the result of applying a filter. For input images, I reused my [filtering code](https://github.com/unixpickle/laion-icons) for the LAION dataset to scrape images which are likely to contain human faces. To get output images, I reverse engineered pieces of Snapchat's Chrome extension to apply Snapchat "lenses" to the input images.
 
+Annoyingly, I found that Snapchat lenses typically only worked for about ~25% of my input images. The rest of the time, the lens did something trivial like change the saturation of the whole image, or slightly blur the background based on some primitive foreground detector; it didn't change the person's face at all.
+
+To mitigate this, I used a collection of scripts to hand label and filter out useless input-output pairs. These scripts are found in the [filter_dataset](filter_dataset) folder.
+
 ## Model architecture
 
 Once I had a dataset, I trained convolutional UNet models on the input-output pairs. I train the model with a regression object&mdash;for a given input, it is trying to predict the mean output. Note that this is different than a diffusion model, where we are actually _sampling from a distribution_ of possible outputs.
